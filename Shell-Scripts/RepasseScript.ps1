@@ -38,7 +38,7 @@ function VeeamStatusReplace {
     }
 }
 
-# --- EXPORTAÇÃO XML ---
+# --- FUNÇÃO EXPORTAÇÃO XML ---
 function ExportXml {
     Param ([string]$switch, [string]$name, [string]$command, [string]$type, [string]$options)
     PROCESS {
@@ -127,9 +127,13 @@ switch ($ITEM) {
         $xml = ImportXml -item backuptape
         $xml | Select-Object @{N="JOBTAPEID";E={$_.ID}}, @{N="JOBTAPENAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBTAPENAME, JOBTAPEID
     }
-    "DiscoveryEndpointJobs" | "DiscoveryAgentJobs" {
+    "DiscoveryEndpointJobs" {
         $xml = ImportXml -item backupendpoint
-        $xml | Select-Object @{N="JOBENDPOINTID";E={$_.ID}}, @{N="JOBENDPOINTNAME";E={$_.NAME}}, @{N="JOBAGENTID";E={$_.ID}}, @{N="JOBAGENTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID, JOBAGENTNAME, JOBAGENTID
+        $xml | Select-Object @{N="JOBENDPOINTID";E={$_.ID}}, @{N="JOBENDPOINTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID
+    }
+    "DiscoveryAgentJobs" {
+        $xml = ImportXml -item backupendpoint
+        $xml | Select-Object @{N="JOBAGENTID";E={$_.ID}}, @{N="JOBAGENTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBAGENTNAME, JOBAGENTID
     }
     "DiscoveryReplicaJobs" {
         $xml = ImportXml -item backupjob
