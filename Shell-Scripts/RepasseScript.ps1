@@ -84,10 +84,14 @@ function ExportXml {
                 $repoExport = foreach ($r in $repos) {
                     try {
                         $cont = $r.GetContainer()
+                        # Correção: Forçando o valor para long (64-bit integer) para evitar strings formatadas
+                        $freeVal = if ($cont.CachedFreeSpace.Value -ne $null) { $cont.CachedFreeSpace.Value } else { $cont.CachedFreeSpace }
+                        $totalVal = if ($cont.CachedTotalSpace.Value -ne $null) { $cont.CachedTotalSpace.Value } else { $cont.CachedTotalSpace }
+                        
                         [PSCustomObject]@{
-                            Name = $r.Name
-                            FreeSpace = if ($cont.CachedFreeSpace.Value) { $cont.CachedFreeSpace.Value } else { $cont.CachedFreeSpace }
-                            TotalSpace = if ($cont.CachedTotalSpace.Value) { $cont.CachedTotalSpace.Value } else { $cont.CachedTotalSpace }
+                            Name       = $r.Name
+                            FreeSpace  = [int64]$freeVal
+                            TotalSpace = [int64]$totalVal
                         }
                     } catch {}
                 }
@@ -188,7 +192,15 @@ switch ($ITEM) {
         if ($res) { [int64](New-TimeSpan -Start (Get-Date "01/01/1970") -End $res.CreationTimeUTC).TotalSeconds } else { "0" }
     }
     "JobsCount" { $xml = ImportXml -item backupjob; [string]($xml | Measure-Object).Count }
-    "RepoFree" { $xml = ImportXml -item backuprepo; $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.FreeSpace) { [string]$repo.FreeSpace } else { "0" } }
-    "RepoCapacity" { $xml = ImportXml -item backuprepo; $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.TotalSpace) { [string]$repo.TotalSpace } else { "0" } }
+    "RepoFree" { 
+        $xml = ImportXml -item backuprepo
+        $repo = $xml | Where-Object { $_.Name -eq $ID }
+        if ($repo.FreeSpace -ne $null) { Write-Output $repo.FreeSpace } else { Write-Output 0 } 
+    }
+    "RepoCapacity" { 
+        $xml = ImportXml -item backuprepo
+        $repo = $xml | Where-Object { $_.Name -eq $ID }
+        if ($repo.TotalSpace -ne $null) { Write-Output $repo.TotalSpace } else { Write-Output 0 } 
+    }
     default { write-output "4" }
 }
