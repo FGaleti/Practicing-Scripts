@@ -1,7 +1,7 @@
 # Script: zabbix_vbr_job
 # Author: Felipe Galeti e Nathan Schiavon
-# Description: Query Veeam job information - Full XML Mode
-# Updated for Veeam v13 & PowerShell 7 (V13 Optimized)
+# Description: Query Veeam job information - 100% XML Cache Mode
+# Updated for Veeam v13 & PowerShell 7
 
 $pathxml = 'C:\Program Files\Zabbix Agent\scripts\TempXmlVeeam'
 $days = '-31'
@@ -13,13 +13,13 @@ $ID0  = [string]$args[2]
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 
-# --- FUNÇÃO DE TRADUÇÃO DE STATUS (Regex v13) ---
+# --- TRADUÇÃO DE STATUS ---
 function VeeamStatusReplace {
     Param ([Parameter(ValueFromPipeline = $true)]$item)
     process {
-        $val = "$item".Trim()
-        if ([string]::IsNullOrWhiteSpace($val)) { return "4" }
-        switch -regex ($val) {
+        $status = "$item".Trim()
+        if ([string]::IsNullOrWhiteSpace($status)) { return "4" }
+        switch -regex ($status) {
             "(?i)Failed"             { "0" }
             "(?i)Warning"            { "1" }
             "(?i)Success|None"       { "2" }
@@ -38,21 +38,18 @@ function VeeamStatusReplace {
     }
 }
 
-# --- FUNÇÃO EXPORTAÇÃO XML ---
+# --- EXPORTAÇÃO XML ---
 function ExportXml {
     Param ([string]$switch, [string]$name, [string]$command, [string]$type, [string]$options)
     PROCESS {
-        $path = "$pathxml\$name" + "temp.xml"
-        $newpath = "$pathxml\$name" + ".xml"
-        
+        $path = "$pathxml\$name" + "temp.xml"; $newpath = "$pathxml\$name" + ".xml"
         try {
             if ($switch -eq "normal") {
                 [System.DateTime]$Date = (Get-Date).AddDays([int]$days)
                 $data = Invoke-Expression "$command -WarningAction SilentlyContinue"
                 if ($options -eq "true") { $data = $data | Where-Object { $_.CreationTimeUTC -ge $Date } }
-                $data | Export-Clixml $path -Depth 3 # Depth 3 captura subpropriedades v13
+                $data | Export-Clixml $path -Depth 3
             }
-            
             if ($switch -eq "byvm") {
                 $rawJobs = Invoke-Expression "$command -WarningAction SilentlyContinue"
                 $data = $rawJobs | Where-Object { $_.JobType -eq $type } | ForEach-Object {
@@ -62,11 +59,9 @@ function ExportXml {
                 }
                 $data | Export-Clixml $path -Depth 3
             }
-            
             if ($switch -eq "bytaskswithretry") {
                  $StartDate = (Get-Date).AddDays([int]$days)
                  $BackupSessions = Get-VBRBackupSession | Where-Object { $_.CreationTimeUTC -ge $StartDate }
-                 
                  $Result = foreach ($BS in ($BackupSessions | Where-Object { $_.IsRetryMode -eq $false })) {
                         [System.Collections.ArrayList]$TaskSessions = @($BS | Get-VBRTaskSession)
                         if ($BS.Result -eq "Failed") {
@@ -84,22 +79,20 @@ function ExportXml {
                  }
                  $Result | Export-Clixml $path -Depth 3
             }
-
             if ($switch -eq "repos") {
                 $repos = Get-VBRBackupRepository
                 $repoExport = foreach ($r in $repos) {
                     try {
                         $cont = $r.GetContainer()
                         [PSCustomObject]@{
-                            Name       = $r.Name
-                            FreeSpace  = if ($cont.CachedFreeSpace.Value) { $cont.CachedFreeSpace.Value } else { $cont.CachedFreeSpace }
+                            Name = $r.Name
+                            FreeSpace = if ($cont.CachedFreeSpace.Value) { $cont.CachedFreeSpace.Value } else { $cont.CachedFreeSpace }
                             TotalSpace = if ($cont.CachedTotalSpace.Value) { $cont.CachedTotalSpace.Value } else { $cont.CachedTotalSpace }
                         }
                     } catch {}
                 }
                 $repoExport | Export-Clixml $path -Depth 2
             }
-            
             if (Test-Path $path) { Move-Item -Path $path -Destination $newpath -Force }
         } catch { Write-Error "Erro XML $name : $_" }
     }
@@ -118,57 +111,44 @@ function ConvertTo-ZabbixDiscoveryJson {
     @{ 'data' = $out } | ConvertTo-Json -Compress
 }
 
-# --- SWITCH PRINCIPAL (100% XML CACHE) ---
+# --- SWITCH PRINCIPAL ---
 switch ($ITEM) {
     "DiscoveryBackupJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.JobType -match "Backup|EpAgentBackup|EpAgentPolicy" } | 
         Select-Object @{N="JOBID";E={$_.ID}}, @{N="JOBNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBNAME, JOBID
     }
-    
     "DiscoveryBackupSyncJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.IsScheduleEnabled -eq "true" -and $_.JobType -eq "BackupSync" } | 
         Select-Object @{N="JOBBSID";E={$_.ID}}, @{N="JOBBSNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBBSNAME, JOBBSID
     }
-    
     "DiscoveryTapeJobs" {
         $xml = ImportXml -item backuptape
         $xml | Select-Object @{N="JOBTAPEID";E={$_.ID}}, @{N="JOBTAPENAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBTAPENAME, JOBTAPEID
     }
-    
-    "DiscoveryEndpointJobs" {
+    "DiscoveryEndpointJobs" | "DiscoveryAgentJobs" {
         $xml = ImportXml -item backupendpoint
-        $xml | Select-Object @{N="JOBENDPOINTID";E={$_.ID}}, @{N="JOBENDPOINTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID
+        $xml | Select-Object @{N="JOBENDPOINTID";E={$_.ID}}, @{N="JOBENDPOINTNAME";E={$_.NAME}}, @{N="JOBAGENTID";E={$_.ID}}, @{N="JOBAGENTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID, JOBAGENTNAME, JOBAGENTID
     }
-
-    "DiscoveryAgentJobs" {
-        $xml = ImportXml -item backupendpoint
-        $xml | Select-Object @{N="JOBAGENTID";E={$_.ID}}, @{N="JOBAGENTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBAGENTNAME, JOBAGENTID
-    }
-    
     "DiscoveryReplicaJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.IsScheduleEnabled -eq "true" -and $_.JobType -eq "Replica" } | 
         Select-Object @{N="JOBREPLICAID";E={$_.ID}}, @{N="JOBREPLICANAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBREPLICANAME, JOBREPLICAID
     }
-    
     "DiscoveryRepo" {
         $xml = ImportXml -item backuprepo
         $xml | Select-Object @{N="REPONAME";E={$_.Name}} | ConvertTo-ZabbixDiscoveryJson -Property REPONAME
     }
-    
     "DiscoveryBackupVmsByJobs" {
         $file = if ($ID -like "BackupSync") { "backupsyncvmbyjob" } else { "backupvmbyjob" }
         $xml = ImportXml -item $file
         $xml | Select-Object @{N="JOBNAME";E={$_.Job}}, @{N="JOBVMNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBVMNAME, JOBNAME
     }
-
     "ExportXml" {
         if (!(Test-Path $pathxml)) { New-Item -ItemType Directory -Path $pathxml -Force | Out-Null }
         if (-not (Get-Module Veeam.Backup.PowerShell)) { Import-Module Veeam.Backup.PowerShell -DisableNameChecking | Out-Null }
         if (-not (Get-VBRServerSession)) { Connect-VBRServer -Server "localhost" | Out-Null }
-        
         ExportXml -command "Get-VBRBackupSession" -name backupsession -switch normal -options true
         ExportXml -command "Get-VBRJob" -name backupjob -switch normal
         ExportXml -command "Get-VBRTapeJob" -name backuptape -switch normal
@@ -179,47 +159,32 @@ switch ($ITEM) {
         ExportXml -name backuprepo -switch repos
         Write-Output "1"
     }
-
     "ResultBackup" {
         $xml = ImportXml -item backuptaskswithretry
         $res = $xml | Where-Object { $_.jobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object JobStart -Descending | Select-Object -First 1
         if (!$res) { "4" } else { ([string]$res.JobResult) | VeeamStatusReplace }
     }
-
     "VmResultBackup" {
         $xml = ImportXml -item backuptaskswithretry
         $res = $xml | Where-Object { $_.Name -eq $ID -and $_.JobName -eq $ID0 } | Sort-Object JobStart -Descending | Select-Object -First 1
         if (!$res) { "4" } else { ([string]$res.Status) | VeeamStatusReplace }
     }
-
     "ResultReplica" {
         $xml = ImportXml -item backupsession
         $res = $xml | Where-Object { $_.jobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object CreationTimeUTC -Descending | Select-Object -First 1
         if (!$res) { "4" } else { ([string]$res.Result) | VeeamStatusReplace }
     }
-
     "RunStatus" {
         $xml = ImportXml -item backupjob
         if (($xml | Where-Object { $_.Id -eq $ID -or $_.Name -eq $ID }).IsRunning) { "1" } else { "0" }
     }
-
     "LastRunTime" {
         $xml = ImportXml -item backupsession
         $res = $xml | Where-Object { $_.JobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object CreationTimeUTC -Descending | Select-Object -First 1
         if ($res) { [int64](New-TimeSpan -Start (Get-Date "01/01/1970") -End $res.CreationTimeUTC).TotalSeconds } else { "0" }
     }
-
     "JobsCount" { $xml = ImportXml -item backupjob; [string]($xml | Measure-Object).Count }
-    
-    "RepoFree" {
-        $xml = ImportXml -item backuprepo
-        $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.FreeSpace) { [string]$repo.FreeSpace } else { "0" }
-    }
-
-    "RepoCapacity" {
-        $xml = ImportXml -item backuprepo
-        $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.TotalSpace) { [string]$repo.TotalSpace } else { "0" }
-    }
-
+    "RepoFree" { $xml = ImportXml -item backuprepo; $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.FreeSpace) { [string]$repo.FreeSpace } else { "0" } }
+    "RepoCapacity" { $xml = ImportXml -item backuprepo; $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.TotalSpace) { [string]$repo.TotalSpace } else { "0" } }
     default { write-output "4" }
 }
