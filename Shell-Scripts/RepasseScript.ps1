@@ -1,7 +1,7 @@
 # Script: zabbix_vbr_job
 # Author: Felipe Galeti e Nathan Schiavon
-# Description: Query Veeam job information - Full XML Mode (V13 Optimized)
-# Updated for Veeam v13 & PowerShell 7
+# Description: Query Veeam job information - Full XML Mode
+# Updated for Veeam v13 & PowerShell 7 (V13 Optimized)
 
 $pathxml = 'C:\Program Files\Zabbix Agent\scripts\TempXmlVeeam'
 $days = '-31'
@@ -13,7 +13,7 @@ $ID0  = [string]$args[2]
 $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 
-# --- FUNÇÃO DE TRADUÇÃO DE STATUS ---
+# --- FUNÇÃO DE TRADUÇÃO DE STATUS (Regex v13) ---
 function VeeamStatusReplace {
     Param ([Parameter(ValueFromPipeline = $true)]$item)
     process {
@@ -38,7 +38,7 @@ function VeeamStatusReplace {
     }
 }
 
-# --- FUNÇÃO EXPORTAÇÃO XML (MODO SÍNCRONO) ---
+# --- FUNÇÃO EXPORTAÇÃO XML ---
 function ExportXml {
     Param ([string]$switch, [string]$name, [string]$command, [string]$type, [string]$options)
     PROCESS {
@@ -49,9 +49,8 @@ function ExportXml {
             if ($switch -eq "normal") {
                 [System.DateTime]$Date = (Get-Date).AddDays([int]$days)
                 $data = Invoke-Expression "$command -WarningAction SilentlyContinue"
-                # V13: Filtro por CreationTimeUTC para precisão
                 if ($options -eq "true") { $data = $data | Where-Object { $_.CreationTimeUTC -ge $Date } }
-                $data | Export-Clixml $path -Depth 3 # Aumentado para Depth 3 para capturar Status v13
+                $data | Export-Clixml $path -Depth 3 # Depth 3 captura subpropriedades v13
             }
             
             if ($switch -eq "byvm") {
@@ -66,7 +65,6 @@ function ExportXml {
             
             if ($switch -eq "bytaskswithretry") {
                  $StartDate = (Get-Date).AddDays([int]$days)
-                 # Get-VBRBackupSession substitui chamadas de classe legadas
                  $BackupSessions = Get-VBRBackupSession | Where-Object { $_.CreationTimeUTC -ge $StartDate }
                  
                  $Result = foreach ($BS in ($BackupSessions | Where-Object { $_.IsRetryMode -eq $false })) {
@@ -89,7 +87,6 @@ function ExportXml {
 
             if ($switch -eq "repos") {
                 $repos = Get-VBRBackupRepository
-                # Correção do Bug de Atribuição Dupla
                 $repoExport = foreach ($r in $repos) {
                     try {
                         $cont = $r.GetContainer()
@@ -121,69 +118,54 @@ function ConvertTo-ZabbixDiscoveryJson {
     @{ 'data' = $out } | ConvertTo-Json -Compress
 }
 
-# --- SWITCH PRINCIPAL (TODAS AS COLETAS VIA XML) ---
-switch ($ITEM)
-{
-    # --- DISCOVERY SECTION (LLD) ---
-    
+# --- SWITCH PRINCIPAL (100% XML CACHE) ---
+switch ($ITEM) {
     "DiscoveryBackupJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.JobType -match "Backup|EpAgentBackup|EpAgentPolicy" } | 
-        Select-Object @{ N = "JOBID"; E = { $_.ID } }, @{ N = "JOBNAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBNAME, JOBID
+        Select-Object @{N="JOBID";E={$_.ID}}, @{N="JOBNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBNAME, JOBID
     }
     
     "DiscoveryBackupSyncJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.IsScheduleEnabled -eq "true" -and $_.JobType -eq "BackupSync" } | 
-        Select-Object @{ N = "JOBBSID"; E = { $_.ID } }, @{ N = "JOBBSNAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBBSNAME, JOBBSID
+        Select-Object @{N="JOBBSID";E={$_.ID}}, @{N="JOBBSNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBBSNAME, JOBBSID
     }
     
     "DiscoveryTapeJobs" {
         $xml = ImportXml -item backuptape
-        $xml | Select-Object @{ N = "JOBTAPEID"; E = { $_.ID } }, @{ N = "JOBTAPENAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBTAPENAME, JOBTAPEID
+        $xml | Select-Object @{N="JOBTAPEID";E={$_.ID}}, @{N="JOBTAPENAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBTAPENAME, JOBTAPEID
     }
     
     "DiscoveryEndpointJobs" {
         $xml = ImportXml -item backupendpoint
-        $xml | Select-Object @{ N = "JOBENDPOINTID"; E = { $_.ID } }, @{ N = "JOBENDPOINTNAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID
+        $xml | Select-Object @{N="JOBENDPOINTID";E={$_.ID}}, @{N="JOBENDPOINTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBENDPOINTNAME, JOBENDPOINTID
     }
 
     "DiscoveryAgentJobs" {
         $xml = ImportXml -item backupendpoint
-        $xml | Select-Object @{ N = "JOBAGENTID"; E = { $_.ID } }, @{ N = "JOBAGENTNAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBAGENTNAME, JOBAGENTID
+        $xml | Select-Object @{N="JOBAGENTID";E={$_.ID}}, @{N="JOBAGENTNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBAGENTNAME, JOBAGENTID
     }
     
     "DiscoveryReplicaJobs" {
         $xml = ImportXml -item backupjob
         $xml | Where-Object { $_.IsScheduleEnabled -eq "true" -and $_.JobType -eq "Replica" } | 
-        Select-Object @{ N = "JOBREPLICAID"; E = { $_.ID } }, @{ N = "JOBREPLICANAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBREPLICANAME, JOBREPLICAID
+        Select-Object @{N="JOBREPLICAID";E={$_.ID}}, @{N="JOBREPLICANAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBREPLICANAME, JOBREPLICAID
     }
     
     "DiscoveryRepo" {
-        # Agora 100% via XML para respeitar sua regra
         $xml = ImportXml -item backuprepo
-        $xml | Select-Object @{ N = "REPONAME"; E = { $_.Name }} | 
-        ConvertTo-ZabbixDiscoveryJson -Property REPONAME
+        $xml | Select-Object @{N="REPONAME";E={$_.Name}} | ConvertTo-ZabbixDiscoveryJson -Property REPONAME
     }
     
     "DiscoveryBackupVmsByJobs" {
-        $itemType = if ($ID -like "BackupSync") { "backupsyncvmbyjob" } else { "backupvmbyjob" }
-        $xml = ImportXml -item $itemType
-        $xml | Select-Object @{ N = "JOBNAME"; E = { $_.Job } }, @{ N = "JOBVMNAME"; E = { $_.NAME } } | 
-        ConvertTo-ZabbixDiscoveryJson -Property JOBVMNAME, JOBNAME
+        $file = if ($ID -like "BackupSync") { "backupsyncvmbyjob" } else { "backupvmbyjob" }
+        $xml = ImportXml -item $file
+        $xml | Select-Object @{N="JOBNAME";E={$_.Job}}, @{N="JOBVMNAME";E={$_.NAME}} | ConvertTo-ZabbixDiscoveryJson -Property JOBVMNAME, JOBNAME
     }
-
-    # --- RESULT & STATUS SECTION (CACHE XML) ---
 
     "ExportXml" {
         if (!(Test-Path $pathxml)) { New-Item -ItemType Directory -Path $pathxml -Force | Out-Null }
-        # Importa módulos e conecta apenas para gerar os arquivos
         if (-not (Get-Module Veeam.Backup.PowerShell)) { Import-Module Veeam.Backup.PowerShell -DisableNameChecking | Out-Null }
         if (-not (Get-VBRServerSession)) { Connect-VBRServer -Server "localhost" | Out-Null }
         
@@ -200,30 +182,44 @@ switch ($ITEM)
 
     "ResultBackup" {
         $xml = ImportXml -item backuptaskswithretry
-        $res = $xml | Where-Object { $_.jobId -eq $ID } | Sort-Object JobStart -Descending | Select-Object -First 1
+        $res = $xml | Where-Object { $_.jobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object JobStart -Descending | Select-Object -First 1
         if (!$res) { "4" } else { ([string]$res.JobResult) | VeeamStatusReplace }
+    }
+
+    "VmResultBackup" {
+        $xml = ImportXml -item backuptaskswithretry
+        $res = $xml | Where-Object { $_.Name -eq $ID -and $_.JobName -eq $ID0 } | Sort-Object JobStart -Descending | Select-Object -First 1
+        if (!$res) { "4" } else { ([string]$res.Status) | VeeamStatusReplace }
+    }
+
+    "ResultReplica" {
+        $xml = ImportXml -item backupsession
+        $res = $xml | Where-Object { $_.jobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object CreationTimeUTC -Descending | Select-Object -First 1
+        if (!$res) { "4" } else { ([string]$res.Result) | VeeamStatusReplace }
     }
 
     "RunStatus" {
         $xml = ImportXml -item backupjob
-        $job = $xml | Where-Object { $_.Id -eq $ID -or $_.Name -eq $ID }
-        if ($job.IsRunning) { "1" } else { "0" }
+        if (($xml | Where-Object { $_.Id -eq $ID -or $_.Name -eq $ID }).IsRunning) { "1" } else { "0" }
     }
 
     "LastRunTime" {
         $xml = ImportXml -item backupsession
-        $res = $xml | Where-Object { $_.JobId -eq $ID } | Sort-Object CreationTimeUTC -Descending | Select-Object -First 1
-        if ($res) { 
-            [int64](New-TimeSpan -Start (Get-Date "01/01/1970") -End $res.CreationTimeUTC).TotalSeconds 
-        } else { "0" }
+        $res = $xml | Where-Object { $_.JobId -eq $ID -or $_.JobName -eq $ID } | Sort-Object CreationTimeUTC -Descending | Select-Object -First 1
+        if ($res) { [int64](New-TimeSpan -Start (Get-Date "01/01/1970") -End $res.CreationTimeUTC).TotalSeconds } else { "0" }
     }
 
+    "JobsCount" { $xml = ImportXml -item backupjob; [string]($xml | Measure-Object).Count }
+    
     "RepoFree" {
         $xml = ImportXml -item backuprepo
         $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.FreeSpace) { [string]$repo.FreeSpace } else { "0" }
     }
 
-    "JobsCount" { $xml = ImportXml -item backupjob; [string]($xml | Measure-Object).Count }
+    "RepoCapacity" {
+        $xml = ImportXml -item backuprepo
+        $repo = $xml | Where-Object { $_.Name -eq $ID }; if ($repo.TotalSpace) { [string]$repo.TotalSpace } else { "0" }
+    }
 
-    default { write-output "4" } # Se não encontrar a opção, retorna 4 por segurança
+    default { write-output "4" }
 }
