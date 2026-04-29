@@ -53,7 +53,7 @@ systemctl restart zabbix-agent2
 
 # Libera a porta 10050 no firewall (se UFW estiver ativo)
 if command -v ufw >/dev/null 2>&1; then
-    echo "🛡️ Configurando o firewall UFW..."
+    echo "Configurando o firewall UFW..."
     ufw allow 10050/tcp
     ufw reload
 fi
@@ -61,6 +61,6 @@ fi
 # Limpa o pacote .deb baixado para não deixar sujeira no servidor
 rm -f zabbix-release_latest.deb
 
-echo "✅ Zabbix Agent 2 versão 7.0 LTS instalado e configurado com sucesso!"
+echo "Zabbix Agent 2 versão 7.0 LTS instalado e configurado com sucesso!"
 echo "   -> Timeout configurado para 30s."
 echo "   -> Execução de comandos remotos permitida."

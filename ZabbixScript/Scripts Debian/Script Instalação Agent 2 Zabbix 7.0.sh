@@ -18,7 +18,7 @@
 #                                                                       #
 #########################################################################
 
-echo "🔧 Instalando Zabbix Agent 2 versão 7.0 LTS no Debian..."
+echo "Instalando Zabbix Agent 2 versão 7.0 LTS no Debian..."
 
 # Atualiza a lista de pacotes e instala dependências iniciais
 apt update && apt install -y wget gnupg2
@@ -53,9 +53,9 @@ systemctl restart zabbix-agent2
 # Libera a porta 10050 no firewall (se o UFW estiver instalado e ativo)
 if command -v ufw >/dev/null 2>&1; then
     ufw allow 10050/tcp
-    echo "🛡️ Porta 10050 liberada no UFW."
+    echo "Porta 10050 liberada no UFW."
 fi
 
-echo "✅ Zabbix Agent 2 versão 7.0 LTS instalado e configurado com sucesso!"
+echo "Zabbix Agent 2 versão 7.0 LTS instalado e configurado com sucesso!"
 echo "   -> Timeout configurado para 30s."
 echo "   -> Execução de comandos remotos permitida via AllowKey."

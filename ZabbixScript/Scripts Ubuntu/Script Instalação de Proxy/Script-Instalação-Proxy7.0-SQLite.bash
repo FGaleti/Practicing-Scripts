@@ -59,14 +59,14 @@ check_os() {
   os_version=$(grep -oP '(?<=^VERSION_ID=).+' /etc/os-release | tr -d '"')
   [[ "$os_id" == "ubuntu" && "$os_version" == "24.04" ]] \
     || error "Sistema não suportado: $os_id $os_version. Requerido: Ubuntu 24.04."
-  success "OS: Ubuntu $os_version (Noble) ✓"
+  success "OS: Ubuntu $os_version (Noble)"
 }
 
 check_internet() {
   info "Verificando conectividade com a internet..."
   ping -c1 -W3 repo.zabbix.com &>/dev/null \
     || error "Sem acesso a repo.zabbix.com. Verifique a rede."
-  success "Conectividade OK ✓"
+  success "Conectividade OK"
 }
 
 validate_config() {
@@ -74,7 +74,7 @@ validate_config() {
   [[ -n "$ZABBIX_SERVER_IP" ]]  || error "ZABBIX_SERVER_IP não definido."
   [[ -n "$PROXY_HOSTNAME" ]]    || error "PROXY_HOSTNAME não definido."
   [[ "$PROXY_MODE" =~ ^[01]$ ]] || error "PROXY_MODE deve ser 0 (active) ou 1 (passive)."
-  success "Configurações validadas ✓"
+  success "Configurações validadas"
 }
 
 # ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ update_system() {
   info "Atualizando lista de pacotes..."
   apt-get update -qq
   apt-get upgrade -y -qq
-  success "Sistema atualizado ✓"
+  success "Sistema atualizado"
 }
 
 install_dependencies() {
@@ -95,7 +95,7 @@ install_dependencies() {
     snmp snmpd snmp-mibs-downloader \
     fping nmap traceroute net-tools iputils-ping \
     unzip tar
-  success "Dependências instaladas ✓"
+  success "Dependências instaladas"
 }
 
 add_zabbix_repo() {
@@ -112,7 +112,7 @@ add_zabbix_repo() {
   rm -f "$tmp_deb"
 
   apt-get update -qq
-  success "Repositório Zabbix 7.0 adicionado ✓"
+  success "Repositório Zabbix 7.0 adicionado"
 }
 
 install_zabbix_proxy() {
@@ -128,7 +128,7 @@ install_zabbix_proxy() {
   dpkg -l zabbix-sql-scripts 2>/dev/null | grep -q "^ii" \
     || error "Pacote zabbix-sql-scripts não instalado corretamente."
 
-  success "Zabbix Proxy 7.0 instalado ✓"
+  success "Zabbix Proxy 7.0 instalado"
 
   # Diagnóstico: loga todos os arquivos SQL disponíveis
   info "Arquivos SQL disponíveis no sistema:"
@@ -188,14 +188,14 @@ setup_sqlite_db() {
       sqlite3 "$SQLITE_DB_PATH" < "$schema_file" \
         || error "Falha ao inicializar o banco SQLite3 via sqlite3."
     fi
-    success "Schema SQLite3 criado ✓"
+    success "Schema SQLite3 criado"
   else
     warn "Banco SQLite3 já existe em $SQLITE_DB_PATH — pulando inicialização."
   fi
 
   chown zabbix:zabbix "$SQLITE_DB_PATH"
   chmod 640 "$SQLITE_DB_PATH"
-  success "Banco SQLite3 configurado em: $SQLITE_DB_PATH ✓"
+  success "Banco SQLite3 configurado em: $SQLITE_DB_PATH"
 }
 
 # ---------------------------------------------------------------------------
@@ -276,7 +276,7 @@ EOF
 
   chmod 640 "$conf_file"
   chown root:zabbix "$conf_file"
-  success "zabbix_proxy.conf configurado ✓"
+  success "zabbix_proxy.conf configurado"
 }
 
 configure_agent2() {
@@ -289,7 +289,7 @@ configure_agent2() {
     -e "s|^Hostname=.*|Hostname=${PROXY_HOSTNAME}|" \
     "$agent_conf"
 
-  success "Zabbix Agent2 configurado ✓"
+  success "Zabbix Agent2 configurado"
 }
 
 # ---------------------------------------------------------------------------
@@ -312,7 +312,7 @@ setup_directories() {
     info "  Criado: $dir"
   done
 
-  success "Diretórios configurados ✓"
+  success "Diretórios configurados"
 }
 
 # ---------------------------------------------------------------------------
@@ -325,7 +325,7 @@ configure_firewall() {
     ufw allow "${PROXY_PORT}/tcp" comment "Zabbix Proxy" &>/dev/null
     ufw allow 10050/tcp comment "Zabbix Agent2" &>/dev/null
     ufw reload &>/dev/null
-    success "UFW configurado ✓"
+    success "UFW configurado"
   else
     warn "UFW não encontrado. Configure o firewall manualmente."
     warn "  Portas necessárias: ${PROXY_PORT}/tcp (Proxy), 10050/tcp (Agent)"
@@ -345,7 +345,7 @@ enable_services() {
     sleep 2
 
     if systemctl is-active --quiet "$svc"; then
-      success "$svc: ATIVO ✓"
+      success "$svc: ATIVO"
     else
       error "$svc falhou ao iniciar. Verifique: journalctl -u $svc --no-pager"
     fi

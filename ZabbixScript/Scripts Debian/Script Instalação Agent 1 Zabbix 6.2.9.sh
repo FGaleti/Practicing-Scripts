@@ -17,7 +17,7 @@
 #                                                                       #
 #########################################################################
 
-echo "🔧 Instalando Zabbix Agent 1 versão 6.2.9 no Debian..."
+echo "Instalando Zabbix Agent 1 versão 6.2.9 no Debian..."
 
 # Atualiza pacotes e instala dependências
 apt update
@@ -41,4 +41,4 @@ if command -v ufw >/dev/null 2>&1; then
     ufw allow 10050/tcp
 fi
 
-echo "✅ Zabbix Agent instalado e configurado com sucesso no Debian."
+echo "Zabbix Agent instalado e configurado com sucesso no Debian."
