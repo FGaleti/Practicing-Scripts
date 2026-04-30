@@ -277,9 +277,6 @@ head -20 seu_script.sh
 ## Suporte e Contato
 
 - **Issues**: [Abra uma issue](../../issues) para bugs ou sugestões
-- **Email**: Seu email (se desejar)
-- **Discussões**: Fórum ou comunidade de preferência
-
 ---
 
 ## Status Atual
